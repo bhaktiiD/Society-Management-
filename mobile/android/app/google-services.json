@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "167735215026",
+    "project_id": "societyos-1f20f",
+    "storage_bucket": "societyos-1f20f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167735215026:android:3e8b6503ab6e4222cf9aab",
+        "android_client_info": {
+          "package_name": "com.societyos.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoHC1HK83ASVR7tkGYVkoq46_UDA6rnVY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
