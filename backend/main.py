@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 import time
 from collections import defaultdict, deque
 
@@ -27,7 +29,30 @@ log = logging.getLogger("societyos")
 
 # API docs/schema reveal every route; expose only when explicitly enabled (dev).
 _DOCS = os.getenv("ENABLE_DOCS") == "1"
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Pay the slow first connect + JWKS fetch at startup, not on the first user request.
+    def warm():
+        try:
+            from sqlalchemy import text
+
+            import auth
+            from database import engine
+
+            conns = [engine.connect() for _ in range(6)]
+            for c in conns:
+                c.execute(text("select 1"))
+                c.close()
+            auth.jwks_client.get_jwk_set()
+        except Exception:
+            log.exception("Warm-up failed (continuing)")
+
+    await asyncio.to_thread(warm)
+    yield
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="SocietyOS API",
     docs_url="/docs" if _DOCS else None,
     redoc_url=None,
