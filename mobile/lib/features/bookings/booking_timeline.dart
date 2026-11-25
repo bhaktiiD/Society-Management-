@@ -3,17 +3,21 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import 'booking_time.dart';
 
-/// Exact-time fallback: just a From and a To box. Tapping one opens a plain
-/// list of times; times that are booked or too early are greyed out.
+/// From and To boxes limited to one slot window [lo]..[hi]. Tapping one opens a
+/// plain list of times; times that are booked or too early are greyed out.
 class TimeRangeControls extends StatelessWidget {
   const TimeRangeControls({
     super.key,
     required this.range,
+    required this.lo,
+    required this.hi,
     required this.busy,
     required this.earliestStart,
     required this.onChanged,
   });
   final TimeRange range;
+  final int lo; // slot start, minutes
+  final int hi; // slot end, minutes
   final List<TimeRange> busy;
 
   /// Earliest allowed start in minutes (later than opening when booking today).
@@ -23,11 +27,11 @@ class TimeRangeControls extends StatelessWidget {
   List<(int, bool)> _options(bool isStart) {
     final out = <(int, bool)>[];
     if (isStart) {
-      for (var t = kOpenMin; t <= kCloseMin - kMinDurMin; t += kStepMin) {
+      for (var t = lo; t <= hi - kMinDurMin; t += kStepMin) {
         out.add((t, t >= earliestStart && !overlapsAny(TimeRange(t, t + kMinDurMin), busy)));
       }
     } else {
-      for (var t = range.start + kMinDurMin; t <= kCloseMin && t - range.start <= kMaxDurMin; t += kStepMin) {
+      for (var t = range.start + kMinDurMin; t <= hi && t - range.start <= kMaxDurMin; t += kStepMin) {
         out.add((t, !overlapsAny(TimeRange(range.start, t), busy)));
       }
     }
@@ -64,7 +68,10 @@ class TimeRangeControls extends StatelessWidget {
       ),
     );
     if (picked == null) return;
-    onChanged(isStart ? adjustRange(range, picked, range.end) : adjustRange(range, range.start, picked));
+    if (!isStart) return onChanged(TimeRange(range.start, picked));
+    // New start: keep the end if it still fits and is free, else one hour after start.
+    final keep = range.end - picked >= kMinDurMin && !overlapsAny(TimeRange(picked, range.end), busy);
+    onChanged(TimeRange(picked, keep ? range.end : picked + kMinDurMin));
   }
 
   @override

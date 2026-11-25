@@ -55,8 +55,8 @@ def notify_users(db: Session, user_ids, title: str, body: str, data: dict | None
                 priority="high",
                 ttl=0,
                 notification=messaging.AndroidNotification(
-                    channel_id="emergency",
-                    sound="default",
+                    channel_id="emergency_alarm",
+                    sound="siren",
                     priority="max",
                     default_vibrate_timings=True,
                     visibility="public",

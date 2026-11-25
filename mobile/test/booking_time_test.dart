@@ -96,8 +96,17 @@ void main() {
     ));
     expect(find.textContaining('Fri, 27 Nov - Today'), findsWidgets);
     expect(find.text('Morning'), findsOneWidget);
+    // Nothing chosen yet: send is disabled until a part of the day is picked.
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
     await tester.tap(find.text('Evening'));
     await tester.pump();
+    // The To list stays inside the evening window (4-8 PM).
+    await tester.tap(find.text('To'));
+    await tester.pumpAndSettle();
+    expect(find.text('8:00 PM'), findsOneWidget);
+    expect(find.text('8:30 PM'), findsNothing);
+    await tester.tap(find.text('8:00 PM'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Send request'));
     await tester.tap(find.text('Send request'));
     await tester.pump();

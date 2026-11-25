@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:vibration/vibration.dart';
 
 import '../../core/api_client.dart';
@@ -158,23 +159,45 @@ class _EmergencyAlertScreenState extends ConsumerState<EmergencyAlertScreen>
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
               child: Column(
                 children: [
-                  ScaleTransition(
-                    scale: Tween<double>(begin: 0.9, end: 1.2)
-                        .animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut)),
-                    child: Semantics(
-                      label: 'Emergency siren',
-                      child: const Icon(Icons.crisis_alert, size: 96, color: Colors.white),
+                  SizedBox(
+                    height: 190,
+                    child: AnimatedBuilder(
+                      animation: _pulse,
+                      builder: (_, child) => Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          for (final k in const [1.0, 0.6])
+                            Container(
+                              width: 110 + 80 * _pulse.value * k,
+                              height: 110 + 80 * _pulse.value * k,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.16 * (1 - _pulse.value * k * 0.6)),
+                              ),
+                            ),
+                          child!,
+                        ],
+                      ),
+                      child: Semantics(
+                        label: 'Emergency siren',
+                        child: Container(
+                          width: 110,
+                          height: 110,
+                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                          child: const Icon(Icons.crisis_alert, size: 64, color: _red1),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('EMERGENCY',
+                  const Text('EMERGENCY ALERT',
                       style: TextStyle(
-                          color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 4)),
+                          color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 3)),
                   const SizedBox(height: 6),
                   Text(e.kindLabel,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                          color: Colors.white, fontSize: 52, fontWeight: FontWeight.w900, height: 1.05)),
+                          color: Colors.white, fontSize: 40, fontWeight: FontWeight.w900, height: 1.1)),
                   const SizedBox(height: 16),
                   Text(e.mine ? '${e.raisedByName} (you)' : e.raisedByName,
                       textAlign: TextAlign.center,
@@ -259,27 +282,38 @@ class _CallTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final first = name.trim().split(' ').first;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          const Icon(Icons.call, size: 32, color: _red1),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Call $first', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 2),
-                phone == null
-                    ? const Text('No phone number available', style: TextStyle(fontSize: 15))
-                    : SelectableText(phone!, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              ],
-            ),
+    final number = phone;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: number == null ? null : () => launchUrl(Uri(scheme: 'tel', path: number)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 26,
+                backgroundColor: _red1,
+                child: Icon(Icons.call, size: 28, color: Colors.white),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(number == null ? 'Call $first' : 'Tap to call $first',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(number ?? 'No phone number available',
+                        style: TextStyle(fontSize: number == null ? 15 : 22, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

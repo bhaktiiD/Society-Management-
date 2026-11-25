@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import 'bookings_repository.dart';
 
-/// Horizontal date strip. Each chip: Today/weekday, day number, month and a
-/// plain word for availability (Free / Some booked / Full).
-class DateStrip extends StatelessWidget {
-  const DateStrip({
+/// Date choice without sideways scrolling: Today / Tomorrow shortcuts plus one
+/// big card that opens a calendar. Fully booked days are greyed out there.
+class DatePickField extends StatelessWidget {
+  const DatePickField({
     super.key,
     required this.days,
     required this.selected,
@@ -18,76 +18,89 @@ class DateStrip extends StatelessWidget {
   final ValueChanged<String> onSelect;
   final DateTime now;
 
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 120,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: days.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => _DateChip(
-          day: days[i],
-          now: now,
-          selected: days[i].date == selected,
-          onTap: () => onSelect(days[i].date),
+  DayAvailability? _hint(String label) {
+    for (final d in days) {
+      final p = parseIsoDate(d.date);
+      if (p != null && dayHint(p, now) == label) return d;
+    }
+    return null;
+  }
+
+  Future<void> _openCalendar(BuildContext context) async {
+    final open = {for (final d in days) if (!d.isFull) d.date};
+    final dates = days.map((d) => parseIsoDate(d.date)).whereType<DateTime>().toList()..sort();
+    if (dates.isEmpty) return;
+    final cur = parseIsoDate(selected) ?? dates.first;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: cur,
+      firstDate: dates.first,
+      lastDate: dates.last,
+      helpText: 'Choose a date',
+      selectableDayPredicate: (d) => open.contains(isoDate(d)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: AppColors.green, onPrimary: AppColors.onGreen),
         ),
+        child: child!,
       ),
     );
+    if (picked != null) onSelect(isoDate(picked));
   }
-}
-
-class _DateChip extends StatelessWidget {
-  const _DateChip({required this.day, required this.now, required this.selected, required this.onTap});
-  final DayAvailability day;
-  final DateTime now;
-  final bool selected;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final d = parseIsoDate(day.date);
-    final full = day.isFull;
-    final fg = selected ? AppColors.onGreen : (full ? AppColors.muted : AppColors.ink);
-    final state = full ? 'Full' : (day.isFree ? 'Free' : 'Some booked');
-    final top = d == null ? '' : (dayHint(d, now) ?? kWeekdaysShort[d.weekday - 1]);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '${d == null ? day.date : dateTitle(d)}, $state',
-      child: ExcludeSemantics(
-        child: Material(
-          color: selected ? AppColors.green : (full ? AppColors.surface : AppColors.greenTint),
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
+    final d = parseIsoDate(selected);
+    final hint = d == null ? null : dayHint(d, now);
+    final title = d == null ? 'Choose a date' : '${dateTitle(d)}${hint == null ? '' : ' - $hint'}';
+    final quick = [('Today', _hint('Today')), ('Tomorrow', _hint('Tomorrow'))];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Wrap(spacing: 8, children: [
+        for (final (label, day) in quick)
+          if (day != null)
+            ChoiceChip(
+              showCheckmark: false,
+              label: Text(label,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: selected == day.date ? AppColors.onGreen : (day.isFull ? AppColors.muted : AppColors.ink))),
+              selected: selected == day.date,
+              selectedColor: AppColors.green,
+              onSelected: day.isFull ? null : (_) => onSelect(day.date),
+            ),
+      ]),
+      const SizedBox(height: 10),
+      Semantics(
+        button: true,
+        label: '$title. Tap to choose another date',
+        child: ExcludeSemantics(
+          child: Material(
+            color: AppColors.greenTint,
             borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: SizedBox(
-              width: 82,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(top, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fg)),
-                  Text(d == null ? '' : '${d.day}',
-                      style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: fg,
-                          decoration: full ? TextDecoration.lineThrough : null)),
-                  Text(d == null ? '' : kMonthsShort[d.month - 1],
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(state, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => _openCalendar(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Row(children: [
+                  const Icon(Icons.calendar_month_rounded, color: AppColors.greenDark, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      const Text('Your day - tap to change',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.muted)),
+                    ]),
                   ),
-                ],
+                  const Icon(Icons.expand_more, color: AppColors.muted),
+                ]),
               ),
             ),
           ),
         ),
       ),
-    );
+    ]);
   }
 }
 

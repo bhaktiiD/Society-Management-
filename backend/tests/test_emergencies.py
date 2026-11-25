@@ -63,7 +63,7 @@ def test_duplicate_and_push(client, world, pushes):
     p = pushes[0]
     assert p["urgent"] is True
     assert p["title"] == "EMERGENCY - Fire"
-    assert p["body"] == "owner, Flat A-101 needs help"
+    assert p["body"] == "owner, Flat A-101 needs urgent help. Please respond now"
     assert p["data"]["type"] == "emergency" and p["data"]["emergency_id"] == r1.json()["id"]
     expected = {world[n].id for n in ["secretary", "landlord", "tenant", "guard"]}
     assert p["ids"] == expected

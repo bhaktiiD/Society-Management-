@@ -37,10 +37,9 @@ class _Slot {
   const _Slot(this.name, this.icon, this.range);
   final String name;
   final IconData icon;
-  final TimeRange range;
+  final TimeRange range; // the owner can only book inside this window
 }
 
-// Four big choices instead of dragging handles; "exact time" stays for odd cases.
 const _slots = [
   _Slot('Morning', Icons.wb_sunny_outlined, TimeRange(8 * 60, 12 * 60)),
   _Slot('Afternoon', Icons.light_mode_outlined, TimeRange(12 * 60, 16 * 60)),
@@ -51,10 +50,10 @@ const _slots = [
 class _BookingPlannerState extends State<BookingPlanner> {
   late final TextEditingController _note;
   String _date = '';
-  TimeRange _range = const TimeRange(18 * 60, 19 * 60);
+  _Slot? _slot; // chosen part of the day; null until the owner picks one
+  TimeRange _range = const TimeRange(kOpenMin, kOpenMin + kMinDurMin);
   String? _occasion;
   bool _sending = false;
-  bool _exact = false; // show the fine-grained time controls
 
   @override
   void initState() {
@@ -92,42 +91,44 @@ class _BookingPlannerState extends State<BookingPlanner> {
     return isToday ? nextHalfHour(now) : day.open;
   }
 
-  TimeRange? _defaultFor(DayAvailability day) =>
-      firstFreeWindow(day.busy, from: _earliest(day), open: day.open, close: day.close);
+  /// First free hour inside [slot] on [day], or null when the slot is full/past.
+  TimeRange? _firstIn(DayAvailability day, _Slot slot) => firstFreeWindow(
+        day.busy,
+        from: _earliest(day) > slot.range.start ? _earliest(day) : slot.range.start,
+        open: slot.range.start,
+        close: slot.range.end,
+      );
 
   void _pickInitial() {
     if (widget.days.isEmpty) return;
-    final day = widget.days.firstWhere((d) => _defaultFor(d) != null, orElse: () => widget.days.first);
+    final day = widget.days.firstWhere(
+      (d) => _slots.any((s) => _firstIn(d, s) != null),
+      orElse: () => widget.days.first,
+    );
     _date = day.date;
-    _range = _defaultFor(day) ?? const TimeRange(kOpenMin, kOpenMin + kMinDurMin);
-    _preferSlot(day);
+    _slot = null;
   }
-
-  bool _slotOk(DayAvailability day, TimeRange r) =>
-      r.start >= day.open && r.end <= day.close && _valid(day, r);
-
-  /// Snap to the first free preset slot; fall back to exact-time controls.
-  void _preferSlot(DayAvailability day) {
-    for (final sl in _slots) {
-      if (_slotOk(day, sl.range)) {
-        _range = sl.range;
-        _exact = false;
-        return;
-      }
-    }
-    _exact = true;
-  }
-
-  bool _valid(DayAvailability day, TimeRange r) => !overlapsAny(r, day.busy) && r.start >= _earliest(day);
 
   void _selectDate(String iso) {
     final day = widget.days.firstWhere((d) => d.date == iso);
     setState(() {
       _date = iso;
-      if (!_valid(day, _range)) {
-        _range = _defaultFor(day) ?? _range;
-        _preferSlot(day);
+      final s = _slot;
+      final r = s == null ? null : _firstIn(day, s);
+      if (r == null) {
+        _slot = null; // that part of the day is not free on the new date
+      } else {
+        _range = r;
       }
+    });
+  }
+
+  void _selectSlot(DayAvailability day, _Slot slot) {
+    final r = _firstIn(day, slot);
+    if (r == null) return;
+    setState(() {
+      _slot = slot;
+      _range = r;
     });
   }
 
@@ -155,24 +156,18 @@ class _BookingPlannerState extends State<BookingPlanner> {
     final date = parseIsoDate(day.date)!;
     final hint = dayHint(date, now);
     final title = hint == null ? dateTitle(date) : '${dateTitle(date)} - $hint';
-    final conflict = overlapsAny(_range, day.busy);
-    final passed = !conflict && _range.start < _earliest(day);
-    final ok = !conflict && !passed;
+    final slot = _slot;
+    final ready = slot != null && !overlapsAny(_range, day.busy) && _range.start >= _earliest(day);
     const h = TextStyle(fontSize: 17, fontWeight: FontWeight.w800);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('${kMonthsFull[date.month - 1]} ${date.year}',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted)),
-      const SizedBox(height: 10),
-      DateStrip(days: widget.days, selected: _date, onSelect: _selectDate, now: widget.clock()),
+      DatePickField(days: widget.days, selected: _date, onSelect: _selectDate, now: widget.clock()),
       const SizedBox(height: 16),
-      Text(title, style: h),
-      const SizedBox(height: 10),
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('When do you need the hall?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const Text('When do you need the hall?', style: h),
             const SizedBox(height: 12),
             GridView.count(
               crossAxisCount: 2,
@@ -185,46 +180,29 @@ class _BookingPlannerState extends State<BookingPlanner> {
                 for (final sl in _slots)
                   _SlotTile(
                     slot: sl,
-                    selected: !_exact && _range == sl.range,
-                    available: _slotOk(day, sl.range),
-                    onTap: () => setState(() {
-                      _range = sl.range;
-                      _exact = false;
-                    }),
+                    selected: slot == sl,
+                    available: _firstIn(day, sl) != null,
+                    onTap: () => _selectSlot(day, sl),
                   ),
               ],
             ),
-            const SizedBox(height: 4),
-            TextButton.icon(
-              onPressed: () => setState(() => _exact = !_exact),
-              icon: Icon(_exact ? Icons.expand_less : Icons.tune_rounded),
-              label: Text(_exact ? 'Hide exact time' : 'Need a different time?'),
-            ),
-            if (_exact) ...[
+            if (slot == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text('Choose a part of the day to continue.',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.muted)),
+              )
+            else ...[
+              const SizedBox(height: 16),
+              Text('Choose your time in the ${slot.name.toLowerCase()} (${slot.range.label})', style: h),
+              const SizedBox(height: 10),
               TimeRangeControls(
                 range: _range,
+                lo: slot.range.start,
+                hi: slot.range.end,
                 busy: day.busy,
                 earliestStart: _earliest(day),
                 onChanged: (r) => setState(() => _range = r),
-              ),
-            ],
-            if (!ok) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: AppColors.errorTint, borderRadius: BorderRadius.circular(14)),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.info_outline, size: 20, color: AppColors.error),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      conflict
-                          ? 'That time is already booked. Please pick another time.'
-                          : 'That start time has already passed. Pick a later time today.',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ]),
               ),
             ],
           ]),
@@ -241,7 +219,7 @@ class _BookingPlannerState extends State<BookingPlanner> {
       const SizedBox(height: 20),
       RequestSummary(
         dateText: title,
-        timeText: '${_range.label} (${durationText(_range.duration)})',
+        timeText: slot == null ? 'Choose a time' : '${_range.label} (${durationText(_range.duration)})',
         occasion: _purpose,
       ),
       const SizedBox(height: 14),
@@ -249,7 +227,7 @@ class _BookingPlannerState extends State<BookingPlanner> {
         width: double.infinity,
         height: 52,
         child: FilledButton(
-          onPressed: ok && !_sending ? _send : null,
+          onPressed: ready && !_sending ? _send : null,
           child: _sending
               ? const SizedBox(
                   width: 22,
@@ -261,7 +239,6 @@ class _BookingPlannerState extends State<BookingPlanner> {
     ]);
   }
 }
-
 
 class _SlotTile extends StatelessWidget {
   const _SlotTile({required this.slot, required this.selected, required this.available, required this.onTap});

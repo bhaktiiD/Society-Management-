@@ -29,7 +29,7 @@ from push import notify_users
 log = logging.getLogger("societyos.emergencies")
 router = APIRouter(tags=["emergencies"])
 
-KIND_LABEL = {"fire": "Fire", "medical": "Medical", "security": "Security", "other": "Emergency"}
+KIND_LABEL = {"fire": "Fire", "medical": "Medical", "security": "Security", "other": "Urgent Help Needed"}
 DUPLICATE_WINDOW = timedelta(minutes=2)
 ACTIVE_WINDOW = timedelta(hours=6)
 
@@ -216,11 +216,11 @@ def raise_emergency(
 
     try:
         if flat:
-            where = f"Flat {flat.flat_number} needs help"
+            where = f"Flat {flat.flat_number} needs urgent help. Please respond now"
         elif result["role_label"] == "Guard":
-            where = "at the gate needs help"
+            where = "at the gate needs urgent help. Please respond now"
         else:
-            where = "from the office needs help"
+            where = "from the office needs urgent help. Please respond now"
         notify_users(
             db,
             _recipients(db, society_id, user.id),

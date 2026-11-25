@@ -46,7 +46,7 @@ class Emergency {
     return Emergency(
       id: (j['id'] as num).toInt(),
       kind: (j['kind'] as String?) ?? 'other',
-      kindLabel: (j['kind_label'] as String?) ?? 'Emergency',
+      kindLabel: (j['kind_label'] as String?) ?? 'Urgent Help Needed',
       message: str('message'),
       raisedByName: (j['raised_by_name'] as String?) ?? 'A neighbour',
       flatNumber: str('flat_number'),

@@ -12,15 +12,39 @@ import 'emergency_repository.dart';
 const _sosRed = Color(0xFFE5484D);
 
 /// Floating red SOS button (bottom right). Tap = hint, long press = open sheet.
-class SosButton extends StatelessWidget {
+class SosButton extends ConsumerStatefulWidget {
   const SosButton({super.key});
+
+  @override
+  ConsumerState<SosButton> createState() => _SosButtonState();
+}
+
+class _SosButtonState extends ConsumerState<SosButton> {
+  bool _sending = false;
+
+  /// No questions asked: in an emergency there is no time to pick a reason.
+  Future<void> _sendNow() async {
+    if (_sending) return;
+    _sending = true;
+    final navigator = Navigator.of(context);
+    final ctx = context;
+    try {
+      final e = await raiseEmergency(ref, kind: 'other');
+      unawaited(showEmergencyAlert(navigator, e));
+    } catch (err) {
+      // ignore: use_build_context_synchronously
+      if (ctx.mounted) showSnack(ctx, errorMessage(err), error: true);
+    } finally {
+      _sending = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
       label: 'Emergency SOS',
-      hint: 'Press and hold to send an emergency alert',
+      hint: 'Press and hold to instantly alert everyone in your society',
       child: Material(
         color: _sosRed,
         elevation: 6,
@@ -28,8 +52,8 @@ class SosButton extends StatelessWidget {
         shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 3)),
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: () => showSnack(context, 'Press and hold for 2 seconds to send an emergency alert'),
-          onLongPress: () => showSosSheet(context),
+          onTap: () => showSnack(context, 'Press and hold to alert everyone in your society instantly'),
+          onLongPress: _sendNow,
           child: const SizedBox(
             width: 60,
             height: 60,
